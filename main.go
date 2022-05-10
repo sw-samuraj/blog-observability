@@ -40,7 +40,7 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	resp["message"] = "Observability check: 👌"
 	jsonResp, err := json.Marshal(resp)
 	if err != nil {
-		log.Errorf("can't marshal json: %w", err)
+		log.Errorf("can't marshal json: %v", err)
 	}
 	log.Infof("writing response with status: %d", http.StatusOK)
 	w.Write(jsonResp)
