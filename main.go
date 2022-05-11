@@ -2,15 +2,15 @@ package main
 
 import (
 	"encoding/json"
-	"net/http"
-	"os"
-
-	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
+	"net/http"
 )
 
 const (
+	appName      = "my-app"
 	hdrRequestId = "X-Request-ID"
 	appAddr      = "0.0.0.0:4040"
 	logFile      = "_logs/observability.log"
@@ -26,13 +26,19 @@ func init() {
 	// Set logging to a file. Comment out following 2 lines to log on the console.
 	f := getLogFile()
 	logrus.SetOutput(f)
+	// Register Prometheus metrics
+	prometheus.Register(totalRequests)
+	prometheus.Register(responseStatus)
+	prometheus.Register(httpDuration)
 }
 
 func main() {
 	log := funcLog("main")
 	r := mux.NewRouter()
 	r.HandleFunc("/", homeHandler)
+	r.Handle("/metrics", promhttp.Handler())
 	r.Use(requestLogMiddleware)
+	r.Use(prometheusMiddleware)
 	log.Infof("starting observability app on: %s", appAddr)
 	http.ListenAndServe(appAddr, r)
 }
@@ -52,40 +58,4 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	log.Infof("writing response with status: %d", http.StatusOK)
 	w.Write(jsonResp)
 	return
-}
-
-func requestLogMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log := requestLog("requestLogMiddleware", getRequestId(r))
-		log.Infof("serving request: %s %s%s", r.Method, r.Host, r.RequestURI)
-		log.Debugf("user agent: %s", r.UserAgent())
-		next.ServeHTTP(w, r)
-	})
-}
-
-func getRequestId(r *http.Request) string {
-	requestId := r.Header.Get(hdrRequestId)
-	if requestId == "" {
-		requestId = uuid.New().String()
-		r.Header.Set(hdrRequestId, requestId)
-		log := requestLog("getRequestId", requestId)
-		log.Warnf("header %s is empty, no request id has been provided", hdrRequestId)
-	}
-	return requestId
-}
-
-func requestLog(f, id string) *logrus.Entry {
-	return funcLog(f).WithField("requestId", id)
-}
-
-func funcLog(f string) *logrus.Entry {
-	return logrus.WithField("func", f)
-}
-
-func getLogFile() *os.File {
-	f, err := os.OpenFile(logFile, os.O_WRONLY|os.O_CREATE, 0644)
-	if err != nil {
-		funcLog("getLogFile").Fatalf("log file %s can't be created: %v", logFile, err)
-	}
-	return f
 }
