@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"go.opentelemetry.io/otel"
 	"net/http"
 	"strconv"
 )
@@ -49,16 +50,21 @@ var httpDuration = promauto.NewHistogramVec(
 	[]string{"method", "path", "app"},
 )
 
-func prometheusMiddleware(next http.Handler) http.Handler {
+func metricsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		spanCtx, span := otel.Tracer(appName).Start(r.Context(), "metricsMiddleware")
+		defer span.End()
 		timer := prometheus.NewTimer(httpDuration.WithLabelValues(
 			r.Method,
 			r.RequestURI,
 			appName,
 		))
 		defer timer.ObserveDuration()
+		log := requestLog("metricsMiddleware", r)
+		log.Debug("starting metrics...")
+		spannedRequest := r.WithContext(spanCtx)
 		rw := newResponseWriter(w)
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(w, spannedRequest)
 		totalRequests.WithLabelValues(
 			r.Method,
 			r.RequestURI,
@@ -68,5 +74,6 @@ func prometheusMiddleware(next http.Handler) http.Handler {
 			strconv.Itoa(rw.statusCode),
 			appName,
 		).Inc()
+		log.Debug("closing metrics...")
 	})
 }
