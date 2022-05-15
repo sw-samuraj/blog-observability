@@ -6,14 +6,18 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel"
+	"log"
 	"net/http"
 )
 
 const (
 	appName      = "my-app"
 	hdrRequestId = "X-Request-ID"
+	hdrTracingId = "X-Tracing-ID"
 	appAddr      = "0.0.0.0:4040"
 	logFile      = "_logs/observability.log"
+	tracingUrl   = "http://localhost:14268/api/traces"
 )
 
 func init() {
@@ -30,6 +34,14 @@ func init() {
 	prometheus.Register(totalRequests)
 	prometheus.Register(responseStatus)
 	prometheus.Register(httpDuration)
+	// Set tracing provider
+	tp, err := tracerProvider(tracingUrl)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// Register our TracerProvider as the global so any imported
+	// instrumentation in the future will default to using it.
+	otel.SetTracerProvider(tp)
 }
 
 func main() {
@@ -37,17 +49,18 @@ func main() {
 	r := mux.NewRouter()
 	r.HandleFunc("/", homeHandler)
 	r.Handle("/metrics", promhttp.Handler())
-	r.Use(requestLogMiddleware)
-	r.Use(prometheusMiddleware)
+	r.Use(tracingMiddleware)
+	r.Use(metricsMiddleware)
+	r.Use(loggingMiddleware)
 	log.Infof("starting observability app on: %s", appAddr)
 	http.ListenAndServe(appAddr, r)
 }
 
 func homeHandler(w http.ResponseWriter, r *http.Request) {
-	requestId := getRequestId(r)
-	log := requestLog("homeHandler", requestId)
+	_, span := otel.Tracer(appName).Start(r.Context(), "homeHandler")
+	defer span.End()
+	log := requestLog("homeHandler", r)
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set(hdrRequestId, requestId)
 	w.WriteHeader(http.StatusOK)
 	resp := make(map[string]string)
 	resp["message"] = "Observability check: 👌"
