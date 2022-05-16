@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel"
@@ -46,11 +47,18 @@ func getTracingId(r *http.Request) string {
 }
 
 func funcLog(f string) *logrus.Entry {
-	return logrus.WithField("func", f)
+	return logrus.WithFields(logrus.Fields{
+		"app":  appName,
+		"func": f,
+	})
 }
 
 func getLogFile() *os.File {
-	f, err := os.OpenFile(logFile, os.O_WRONLY|os.O_CREATE, 0644)
+	file := logFile
+	if appName != defaultAppName {
+		file = fmt.Sprintf(logFilePattern, appName)
+	}
+	f, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
 		funcLog("getLogFile").Fatalf("log file %s can't be created: %v", logFile, err)
 	}
