@@ -28,7 +28,8 @@ const (
 	hdrUserAgent   = "User-Agent"
 	logFile        = "_logs/observability.log"
 	logFilePattern = "_logs/%s.log"
-	tracingUrl     = "http://grafana.edu.dobias.info:14268/api/traces"
+	tracingUrl     = "http://localhost:14268/api/traces"
+	// tracingUrl     = "http://grafana.edu.dobias.info:14268/api/traces"
 )
 
 var (
@@ -114,15 +115,14 @@ func randomizeLatency() {
 	time.Sleep(time.Duration(n) * time.Millisecond)
 }
 
-func callDownstream(r *http.Request, spanCtx context.Context, url string) {
-	_, span := otel.Tracer(appName).Start(spanCtx, "callDownstream")
+func callDownstream(r *http.Request, ctx context.Context, url string) {
+	spanCtx, span := otel.Tracer(appName).Start(ctx, "callDownstream")
 	defer span.End()
 	log := requestLog("callDownstream", r)
 	log.Infof("calling downstream service: %s", url)
-	downstreamRequest := getDownstreamRequest(r, url)
-	spannedRequest := downstreamRequest.WithContext(spanCtx)
+	downstreamRequest := getDownstreamRequest(spanCtx, r, url)
 	client := getClient()
-	resp, err := client.Do(spannedRequest)
+	resp, err := client.Do(downstreamRequest)
 	if err != nil {
 		log.Errorf("error calling downstream service: %s", err)
 	}
@@ -130,8 +130,9 @@ func callDownstream(r *http.Request, spanCtx context.Context, url string) {
 	log.Infof("downstream service returned request id: %s", resp.Header.Get(hdrRequestId))
 }
 
-func getDownstreamRequest(r *http.Request, url string) *http.Request {
-	downstreamRequest, err := http.NewRequest("GET", url, nil)
+func getDownstreamRequest(ctx context.Context, r *http.Request, url string) *http.Request {
+	downstreamRequest, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(downstreamRequest.Header))
 	if err != nil {
 		log := requestLog("getDownstreamRequest", r)
 		log.Errorf("error assembling downstream request: %s", err)
