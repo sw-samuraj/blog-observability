@@ -27,7 +27,7 @@ func requestLog(f string, r *http.Request) *logrus.Entry {
 	tid := getTracingId(r)
 	return funcLog(f).WithFields(logrus.Fields{
 		"requestId": rid,
-		"tracingId": tid,
+		"trace_id": tid,
 	})
 }
 
