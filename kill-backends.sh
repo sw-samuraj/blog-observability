@@ -1,6 +1,7 @@
 #!/bin/sh -eu
 
-LOG_FILE="_logs/observability.log"
+LOG_DIR="_logs"
+LOG_FILE="${LOG_DIR}/observability.log"
 
 kill_app () {
   APP_PID=$(pgrep "${APP}" || echo "" )
@@ -13,15 +14,35 @@ kill_app () {
   fi
 }
 
+kill_downstream () {
+  DOWNSTREAM=$(pgrep -a observability | grep downstream || echo "")
+  if [ -z "${DOWNSTREAM}" ]
+  then
+    echo "Downstream services are not running."
+  else
+    echo "Killing downstream services."
+    pkill -f 'observability.*downstream'
+  fi
+}
+
+# Following app names are symlinks - if you don't have them you should either
+# create them or change variables to real process names in your environment.
 APP="loki"
 kill_app
 APP="promtail"
 kill_app
 APP="prometheus"
 kill_app
+APP="jaeger"
+kill_app
+APP="grafana"
+kill_app
+
+kill_downstream
 
 if [ -f "${LOG_FILE}" ]
 then
-  echo "Deleting the old my-app log file..."
-  rm "${LOG_FILE}"
+  echo "Deleting old log files..."
+  # rm "${LOG_FILE}"
+  rm -rf "${LOG_DIR}/*"
 fi
