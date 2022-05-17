@@ -21,14 +21,15 @@ import (
 )
 
 const (
-	defaultAppName = "my-app"
-	defaultAppPort = "4040"
-	hdrRequestId   = "X-Request-ID"
-	hdrTracingId   = "X-Tracing-ID"
-	hdrUserAgent   = "User-Agent"
-	logFile        = "_logs/observability.log"
-	logFilePattern = "_logs/%s.log"
-	tracingUrl     = "http://localhost:14268/api/traces"
+	defaultAppName    = "my-app"
+	defaultAppPort    = "4040"
+	defaultTracingUrl = "http://localhost:14268/api/traces"
+	hdrCorrelationId  = "X-Correlation-ID"
+	hdrRequestId      = "X-Request-ID"
+	hdrTracingId      = "X-Tracing-ID"
+	hdrUserAgent      = "User-Agent"
+	logFile           = "_logs/observability.log"
+	logFilePattern    = "_logs/%s.log"
 	// tracingUrl     = "http://grafana.edu.dobias.info:14268/api/traces"
 )
 
@@ -37,6 +38,7 @@ var (
 	appName       string
 	appPort       string
 	downstreamUrl string
+	tracingUrl    string
 	goVersion     = runtime.Version()
 )
 
@@ -45,6 +47,7 @@ func init() {
 	flag.StringVar(&appName, "n", defaultAppName, "Application name.")
 	flag.StringVar(&appPort, "p", defaultAppPort, "Application port.")
 	flag.StringVar(&downstreamUrl, "d", "", "Downstream URL. Empty string triggers no call to downstream service.")
+	flag.StringVar(&tracingUrl, "t", defaultTracingUrl, "Tracing URL.")
 	printHelp := flag.Bool("h", false, "Print help.")
 	flag.Parse()
 	if *printHelp {
@@ -128,6 +131,7 @@ func callDownstream(r *http.Request, ctx context.Context, url string) {
 	}
 	log.Infof("downstream service returned http code: %d", resp.StatusCode)
 	log.Infof("downstream service returned request id: %s", resp.Header.Get(hdrRequestId))
+	log.Debugf("downstream service returned correlation id: %s", resp.Header.Get(hdrCorrelationId))
 }
 
 func getDownstreamRequest(ctx context.Context, r *http.Request, url string) *http.Request {
@@ -139,7 +143,7 @@ func getDownstreamRequest(ctx context.Context, r *http.Request, url string) *htt
 	}
 	downstreamRequest.Header.Set(hdrUserAgent, fmt.Sprintf("Golang/%s", goVersion))
 	downstreamRequest.Header.Add(hdrRequestId, uuid.New().String())
-	// TODO Vita: set tracing id
+	downstreamRequest.Header.Add(hdrCorrelationId, getCorrelationId(r))
 	return downstreamRequest
 }
 
