@@ -1,7 +1,8 @@
-#!/bin/sh -eu
+#!/bin/bash -eu
 
 LOG_DIR="_logs"
 LOG_FILE="${LOG_DIR}/observability.log"
+POSITION_FILE="${LOG_DIR}/positions.yaml"
 
 kill_app () {
   APP_PID=$(pgrep "${APP}" || echo "" )
@@ -43,6 +44,6 @@ kill_downstream
 if [ -f "${LOG_FILE}" ]
 then
   echo "Deleting old log files..."
-  # rm "${LOG_FILE}"
-  rm -rf "${LOG_DIR}/*"
+  rm "${POSITION_FILE}"
+  find "${LOG_DIR}" -name '*.log' -delete
 fi
