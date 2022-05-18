@@ -44,6 +44,11 @@ kill_downstream
 if [ -f "${LOG_FILE}" ]
 then
   echo "Deleting old log files..."
-  rm "${POSITION_FILE}"
   find "${LOG_DIR}" -name '*.log' -delete
+fi
+
+if [ -f "${POSITION_FILE}" ]
+then
+  echo "Deleting old position file..."
+  rm "${POSITION_FILE}"
 fi
